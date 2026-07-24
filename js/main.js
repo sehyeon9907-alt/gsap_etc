@@ -458,15 +458,15 @@ function totalWidth() {
   return Math.max(0, track.scrollWidth - wrap.clientWidth);
 }
 
-//horizontal_section은 세로 스크롤을 가로 이동으로 바꿔서 보여줌
+//horizontal_section은 세로 스크롤을 가로 이동으로 바궈 보여줌
 const horizontalTween = gsap.to('.track', {
-  //트랙을 왼쪽으로 이동시켜 오른쪽 카드들이 보이게 한다.
+  //트랙을 왼쪽으로 이동시켜 오른쪽 카드들이 보이게 한다
   x: () => -totalWidth(),
   ease: 'none',
   scrollTrigger: {
     trigger: '.horizontal_section',
     start: 'top top',
-    //실제 이동 거리보다 더 길게 잡아 앞뒤 여백 스크롤을 만든다.
+    //실제 이동 거리보다 더 길게 잡아 앞뒤 여백 스크롤을 만든다
     end: () => '+=' + (totalWidth() + window.innerWidth * 1.45),
     scrub: true,
     pin: true,
@@ -520,13 +520,281 @@ const imageMotionPresets = [
 ];
 const imageMotionOffset = Math.floor(Math.random() * imageMotionPresets.length);
 
+
 //각 case_panel 안에서 텍스트는 순서대로, 이미지는 서로 다른 방향에서 등장
-document.querySelectorAll('.case_panel').forEach((article, index)=>{
+document.querySelectorAll('.case_panel').forEach((article, articleIndex) => {
   const copyItems = article.querySelectorAll('.case_kicker,.case_copy h2,.case_copy p,.case_meta li');
-  const caseImages = article.querySelectorAll('.case_media');
+  const caseImages = article.querySelectorAll('.case_image');
+  //텍스트 요소들을 아래에서 위로 순서대로 등장 시킨다
+  gsap.fromTo(copyItems, {
+    y: 36,
+    opacity: 0,
+  }, {
+    y: 0,
+    opacity: 1,
+    stagger: 0.08,
+    duration: 0.8,
+    ease: 'power2.out',
+    scrollTrigger: {
+      // 현재 아티클을 기준으로 등장 타이밍을 잡는다.
+      trigger: article,
+      // 가로 스크롤 애니메이션 안에서 위치를 계산한다.
+      containerAnimation: horizontalTween,
+      // 패널 왼쪽이 화면 70% 지점에 오면 시작한다.
+      start: 'left 70%',
+      // 다시 왼쪽으로 벗어나면 되감기만 한다.
+      toggleActions: 'play none none reverse',
+    },
+  })
 
+  //패널안의 이미지들을 하나씩 다른 preset으로 등장
+  caseImages.forEach((caseImage, imageIndex) => {
+    // 랜덤 시작점과 패널/이미지 순서를 섞어 사용할 preset 번호를 만든다.
+    const presetIndex = (imageMotionOffset + articleIndex + imageIndex) % imageMotionPresets.length;
+    // 실제로 적용할 모션 preset을 꺼낸다.
+    const preset = imageMotionPresets[presetIndex];
+    // CSS에 이미 잡힌 기본 회전값을 읽어둔다.
+    const baseRotate = parseFloat(gsap.getProperty(caseImage, 'rotate')) || 0;
+    gsap.fromTo(caseImage, {
+      x: preset.x,
+      y: preset.y,
+      opacity: 0,
+      scale: preset.scale,
+      rotate: baseRotate + preset.rotate,
+      filter: preset.filter,
+    }, {
+      // 최종 x 위치는 원래 자리다.
+      x: 0,
+      // 최종 y 위치는 원래 자리다.
+      y: 0,
+      // 최종 상태는 완전히 보이게 한다.
+      opacity: 1,
+      // 최종 크기는 원래 크기다.
+      scale: 1,
+      // 최종 회전은 CSS 기본 회전값으로 돌아간다.
+      rotate: baseRotate,
+      // 최종 상태에서는 blur를 지운다.
+      filter: 'blur(0px)',
+      // 같은 패널 안에서도 이미지마다 조금씩 늦게 나온다.
+      delay: imageIndex * 0.08,
+      // preset마다 다른 등장 시간을 사용한다.
+      duration: preset.duration,
+      // preset마다 다른 easing을 사용한다.
+      ease: preset.ease,
+      scrollTrigger: {
+        // 현재 패널을 기준으로 이미지 등장 타이밍을 잡는다.
+        trigger: article,
+        // 가로 스크롤 애니메이션 안에서 위치를 계산한다.
+        containerAnimation: horizontalTween,
+        // 이미지 순서가 뒤로 갈수록 조금 더 늦게 시작한다.
+        start: `left ${70 - imageIndex * 6}%`,
+        // 뒤로 스크롤하면 이미지를 다시 숨긴다.
+        toggleActions: 'play none none reverse',
+      },
+    })
 
+  })
+})
 
+//이미지나 폰트가 늦게 로드되면 섹션 위치가 달라질 수 있다
+//그때 스크롤트리거 위치 계산을 다시 맞춰주는 함수
+function refreshScrollScenes() {
+  //시작점과 끝점을 다시 계산하게 한다.
+  ScrollTrigger.refresh();
+  //위치가 바뀐 뒤에 active 메뉴도 다시 맞춤
+  updateActiveFromViewport();
+}
 
+window.addEventListener('resize', () => {
+  refreshScrollScenes();
+})
 
+// 화면 크기가 바뀌면 가로 스크롤 거리도 달라지므로 다시 계산한다.
+window.addEventListener('resize', () => {
+  // 화면 크기가 바뀐 뒤 ScrollTrigger 계산을 다시 맞춘다.
+  refreshScrollScenes();
+});
+
+const statCounters = [...document.querySelectorAll('[data-count-to]')].map((el) => ({
+  el,
+  end: parseInt(el.getAttribute('data-count-to'), 10),
+  padLength: parseInt(el.getAttribute('data-pad') || '0', 10),
+  state: { val: 0 },
+}));
+const statsSection = document.querySelector('.stats_section');
+let hasPlayedStats = false;
+
+// 숫자 앞에 0을 붙여야 할 때 data-pad 값만큼 자리수를 맞춘다.
+function setStatValue(counter, value) {
+  // 소수점이 생긴 애니메이션 값을 정수로 내린다.
+  counter.el.textContent = String(Math.floor(value)).padStart(counter.padLength, '0');
+}
+
+// 카운터를 다시 00부터 시작할 수 있게 초기화한다.
+function resetStatCounters() {
+  // 카운터가 다시 재생될 수 있도록 재생 기록을 꺼둔다.
+  hasPlayedStats = false;
+
+  // 준비된 카운터를 모두 처음 상태로 되돌린다.
+  statCounters.forEach((counter) => {
+    // 진행 중이던 숫자 애니메이션이 있으면 멈춘다.
+    gsap.killTweensOf(counter.state);
+    // 내부 숫자 상태를 0으로 바꾼다.
+    counter.state.val = 0;
+    // 화면에 보이는 숫자도 00 상태로 맞춘다.
+    setStatValue(counter, 0);
+  });
+}
+
+// 통계 섹션이 보이면 00에서 목표 숫자까지 올라가게 만든다.
+function playStatCounters() {
+  // 이미 한 번 재생했다면 같은 위치에서 중복 실행하지 않는다.
+  if (hasPlayedStats) return;
+  // 지금부터는 재생한 상태로 표시한다.
+  hasPlayedStats = true;
+
+  // 각 숫자 카운터를 목표값까지 올린다.
+  statCounters.forEach((counter) => {
+    // 혹시 남아 있는 이전 애니메이션을 먼저 멈춘다.
+    gsap.killTweensOf(counter.state);
+    // 시작 숫자를 0으로 맞춘다.
+    counter.state.val = 0;
+    // 화면 표시도 0으로 초기화한다.
+    setStatValue(counter, 0);
+
+    // state.val 값을 목표 숫자까지 부드럽게 증가시킨다.
+    gsap.to(counter.state, {
+      // HTML data-count-to에 적어둔 목표 숫자까지 간다.
+      val: counter.end,
+      // 숫자가 올라가는 전체 시간을 정한다.
+      duration: 1.35,
+      // 끝에 가까울수록 부드럽게 느려지게 한다.
+      ease: 'power2.out',
+      // 값이 바뀔 때마다 화면 숫자도 같이 바꾼다.
+      onUpdate() {
+        // 현재 애니메이션 값을 화면에 표시한다.
+        setStatValue(counter, counter.state.val);
+      },
+      // 애니메이션이 끝나면 정확한 목표 숫자로 한 번 더 맞춘다.
+      onComplete() {
+        // 반올림 오차 없이 마지막 숫자를 고정한다.
+        setStatValue(counter, counter.end);
+      },
+    });
+  });
+}
+
+// ScrollTrigger가 놓치는 상황을 줄이려고 실제 화면에 보이는지도 직접 확인한다.
+function playStatCountersIfVisible() {
+  // 통계 섹션이 없으면 확인할 대상이 없으니 멈춘다.
+  if (!statsSection) return;
+
+  // 통계 섹션이 현재 화면에서 어디에 있는지 가져온다.
+  const rect = statsSection.getBoundingClientRect();
+  // 섹션이 화면 안쪽에 어느 정도 들어왔는지 판단한다.
+  const isStatsVisible = rect.top < window.innerHeight * 0.9 && rect.bottom > window.innerHeight * 0.12;
+
+  // 실제로 보이는 상태라면 카운터를 실행한다.
+  if (isStatsVisible) {
+    // 중복 실행 방지는 playStatCounters 안에서 처리한다.
+    playStatCounters();
+  }
+}
+
+// ScrollTrigger와 IntersectionObserver를 같이 써서 카운터가 안 보이는 상황을 줄인다.
+if (statCounters.length && statsSection) {
+  // 페이지 시작 시 숫자를 00으로 맞춘다.
+  resetStatCounters();
+
+  // ScrollTrigger로 통계 섹션 진입을 감지한다.
+  ScrollTrigger.create({
+    // 통계 섹션을 감지 기준으로 삼는다.
+    trigger: statsSection,
+    // 섹션 top이 화면 88% 지점에 오면 시작한다.
+    start: 'top top',
+    // 섹션 bottom이 화면 위를 지나면 종료로 본다.
+    end: 'bottom top',
+    // 아래로 들어올 때 카운터를 재생한다.
+    onEnter: playStatCounters,
+    // 위로 다시 들어올 때도 카운터를 재생한다.
+    onEnterBack: playStatCounters,
+    // 스크롤 중에도 보이는지 한 번 더 확인한다.
+    onUpdate: playStatCountersIfVisible,
+    // ScrollTrigger가 새로 계산될 때도 보이는지 확인한다.
+    onRefresh: playStatCountersIfVisible,
+    // 통계 섹션보다 위로 완전히 돌아가면 다시 00으로 초기화한다.
+    onLeaveBack: resetStatCounters,
+  });
+
+  // 브라우저가 IntersectionObserver를 지원하면 보조 감지를 하나 더 붙인다.
+  if ('IntersectionObserver' in window) {
+    // 실제 화면 교차 여부를 감시할 observer를 만든다.
+    const statsObserver = new IntersectionObserver((entries) => {
+      // entries 중 하나라도 화면에 들어왔는지 확인한다.
+      if (entries.some((entry) => entry.isIntersecting)) {
+        // 화면에 들어왔다면 카운터를 재생한다.
+        playStatCounters();
+      }
+    }, {
+      // 18% 정도만 보여도 진입으로 판단한다.
+      threshold: 0.18,
+      // 아래쪽은 조금 일찍 벗어난 것으로 보게 여백을 준다.
+      rootMargin: '0px 0px -10% 0px',
+    });
+
+    // 통계 섹션을 실제 감시 대상으로 등록한다.
+    statsObserver.observe(statsSection);
+  }
+}
+
+//마지막 CTA 버튼도 화면에 들어오면 자연스럽게 나타난다.
+gsap.to('.cta_section.cta_btn',{
+  x:0,
+  y:0,
+  opacity:1,
+  duration:0.6,
+  ease:'power2.out',
+  scrollTrigger: {
+    // CTA 섹션을 기준으로 버튼 등장 타이밍을 잡는다.
+    trigger: '.cta_section',
+    // CTA 섹션 top이 화면 80%에 오면 시작한다.
+    start: 'top 80%',
+    // 아래로 들어오면 재생하고, 위로 돌아가면 초기화한다.
+    toggleActions: 'play none none reset',
+  },
+});
+
+document.querySelectorAll('.magnet_zone').forEach((zone)=>{
+  const btn = zone.querySelector('.cta_btn');
+  //버튼이 없으면 자석 효과를 줄 대상도 없으니 멈춘다
+  if(!btn) return;
+
+  zone.style.position = 'relative';
+  zone.style.display = 'inline-block';
+
+  zone.addEventListener('mousemove',()=>{
+    // zone의 화면 위치와 크기를 가져온다.
+    const rect = zone.getBoundingClientRect();
+    // 마우스가 zone 중앙에서 가로로 얼마나 떨어졌는지 계산한다.
+    const x = event.clientX - (rect.left + rect.width / 2);
+    // 마우스가 zone 중앙에서 세로로 얼마나 떨어졌는지 계산한다.
+    const y = event.clientY - (rect.top + rect.height / 2);
+
+    // 계산한 거리의 10%만큼만 버튼을 움직여 과하지 않게 만든다.
+    btn.style.transform = `translate(${x * 0.1}px,${y * 0.1}px)`;
+  });
+
+  zone.addEventListener('mouseleave',()=>{
+    btn.style.transform = `translate(0,0)`;
+  });
+});
+
+window.addEventListener('load',()=>{
+  refreshScrollScenes();
+  setTimeout(refreshScrollScenes,500)
+  //document.fonts가 있는 브라우저라면 폰트 로딩도 기다린다.
+  if(document.fonts){
+    //폰트가 모두 준비된 뒤에 스크롤트리거 위치를 다시 맞춘다.
+    document.fonts.ready.then(refreshScrollScenes);
+  }
 })
